@@ -32,9 +32,7 @@ public record ContainedDefault(Type ConcreteType, Type AsType, object Instance, 
 
 public class DefaultContainer {
     readonly ConcurrentDictionary<Type, ContainedDefault> defaults = new();
-    
-    public int Count => defaults.Count;
-    
+    readonly ConcurrentDictionary<(string, Type), ContainedDefault> keyedDefaults = new();
     
     public bool Contains(Type type) => defaults.ContainsKey(type);
     public ContainedDefault Get(Type type) => defaults[type];
@@ -47,10 +45,16 @@ public class DefaultContainer {
         
         throw new Exception($"Instance of type {containedDefault.Instance.GetType().FullName} is not of the correct type {containedDefault.AsType.FullName}.");
     }
-}
-
-public static class DefaultContainerExtensions {
-    public static void Get<T>(this DefaultContainer container, Type type, FinderFlags finderFlags) where T : class {
-        container.Get()
+    
+    public bool Contains(string key, Type type) => keyedDefaults.ContainsKey((key, type));
+    public ContainedDefault Get(string key, Type type) => keyedDefaults[(key, type)];
+    public bool TryGet(string key, Type type, out ContainedDefault containedDefault) => keyedDefaults.TryGetValue((key, type), out containedDefault!);
+    public void Add(string key, ContainedDefault containedDefault) {
+        if (DefaultValidator.Validate(containedDefault.AsType, containedDefault.Instance, containedDefault.Flags)) {
+            keyedDefaults[(key, containedDefault.AsType)] = containedDefault;
+            return;
+        }
+        
+        throw new Exception($"Instance of type {containedDefault.Instance.GetType().FullName} is not of the correct type {containedDefault.AsType.FullName}.");
     }
 }

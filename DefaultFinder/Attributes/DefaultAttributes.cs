@@ -5,7 +5,7 @@ public readonly record struct Any;
 [Flags]
 public enum DefaultFlags {
     None = 0,
-    AllowOverride = 1 << 0,
+    Overrideable = 1 << 0,
     Transient = 1 << 1,
     Cloneable = 1 << 2 | Transient,
 }
