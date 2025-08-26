@@ -1,4 +1,5 @@
 ﻿using DefaultFinder.Attributes;
+using DefaultFinder.Internal;
 
 namespace DefaultFinder;
 
@@ -15,7 +16,7 @@ public static class DefaultFindR {
 
     public static object Find(Type type, FinderFlags finderFlags = FinderFlags.None) {
         if (!s_initialized)
-            Initialize();
+            Initialize(); 
         
         return s_container.TryGet(type, out var containedDefault) 
             ? GetDefault(containedDefault, s_container, finderFlags) 

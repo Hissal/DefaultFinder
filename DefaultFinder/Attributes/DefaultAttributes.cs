@@ -1,7 +1,5 @@
 ﻿namespace DefaultFinder.Attributes;
 
-public readonly record struct Any;
-
 [Flags]
 public enum DefaultFlags {
     None = 0,
@@ -25,22 +23,6 @@ public class DefaultAttribute : Attribute {
     public DefaultAttribute(string key, Type @as, DefaultFlags flags = DefaultFlags.None) {
         AsType = @as;
         Flags = flags;
-        Key = key;
-    }
-}
-
-[AttributeUsage(AttributeTargets.Class, Inherited = false)]
-public class DefaultGenericAttribute : Attribute {
-    public readonly Type GenericType;
-    public readonly DefaultFlags Flags;
-    public readonly Type[] GenericArgs;
-    public readonly string Key;
-    
-    public DefaultGenericAttribute(Type genericType, Type[] genericArgs, DefaultFlags flags = DefaultFlags.None) : this(string.Empty, genericType, genericArgs, flags) {}
-    public DefaultGenericAttribute(string key, Type genericType, Type[] genericArgs, DefaultFlags flags = DefaultFlags.None) {
-        GenericType = genericType;
-        Flags = flags;
-        GenericArgs = genericArgs;
         Key = key;
     }
 }

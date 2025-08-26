@@ -2,7 +2,7 @@
 using System.Reflection;
 using DefaultFinder.Attributes;
 
-namespace DefaultFinder;
+namespace DefaultFinder.Internal;
 
 public static class DefaultCtorFactory {
     internal static ConstructorInfo GetDefaultConstructor(Type type) {

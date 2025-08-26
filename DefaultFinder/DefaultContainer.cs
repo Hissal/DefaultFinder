@@ -1,17 +1,64 @@
 ﻿using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using System.Reflection;
 using DefaultFinder.Attributes;
+using DefaultFinder.Internal;
 
 namespace DefaultFinder;
 
 public static class DefaultValidator {
-    public static bool Validate<T>(object instance, DefaultFlags flags) where T : class => Validate(typeof(T), instance, flags);
-
-    public static bool Validate(Type type, object instance, DefaultFlags flags) {
-        if (!type.IsInstanceOfType(instance))
+    public static bool Validate(Type asType, object instance, DefaultFlags flags) {
+        if (!asType.IsInstanceOfType(instance))
             return false;
 
         return true;
+    }
+    
+    internal static bool CanBe(GenericDefaultInfo genericDefaultInfo, Type asType) {
+        return true;
+        // if (!asType.IsGenericType)
+        //     return false;
+        //
+        // if (asType.GetGenericTypeDefinition() != genericDefaultInfo.AsTypeDefinition)
+        //     return false;
+        //
+        // // If no type params are specified, any generic args are acceptable
+        // if (genericDefaultInfo.AsTypeGenericArgs is null)
+        //     return true;
+        //
+        // // Cheack type params
+        // var typeParams = asType.GetGenericArguments();
+        //
+        // if (typeParams.Length != genericDefaultInfo.AsTypeGenericArgs.Length)
+        //     return false;
+        //
+        // for (int i = 0; i < typeParams.Length; i++) {
+        //     var asParam = genericDefaultInfo.AsTypeGenericArgs[i];
+        //     if (asParam is null)
+        //         continue;
+        //     
+        //     if (typeParams[i] != asParam)
+        //         return false;
+        // }
+        //
+        // return true;
+        //
+        // var isMatch = true;
+        // var matchingParams = 0;
+        //    
+        // // Find match and params
+        // for (var i = 0; i < asTypeParams.Length; i++) {
+        //     var containedParam = defaultInfo.AsTypeGenericArgs[i];
+        //     if (containedParam.IsGenericTypeParameter)
+        //         continue;
+        //         
+        //     if (asTypeParams[i] != containedParam) {
+        //         isMatch = false;
+        //         break;
+        //     }
+        //         
+        //     matchingParams++;
+        // }
     }
 }
 
@@ -30,13 +77,125 @@ public record ContainedDefault(Type ConcreteType, Type AsType, object Instance, 
     }
 }
 
+internal record ContainedGenericDefinition(GenericDefaultInfo[] GenericInfos) {
+    public bool Contains(Type asType) {
+        // TODO: this is a stupid implementation (no need to check all just check until first match)
+        var asTypeParams = asType.GetGenericArguments();
+        GenericDefaultInfo? currentCandidate = null;
+        
+        var highestMatchingParams = 0;
+
+        foreach (var containedDefinition in GenericInfos) {
+            // No specified type params (lowest priority)
+            if (containedDefinition.AsTypeGenericArgs.All(arg => arg.IsGenericTypeParameter)) {
+                if (HandleFullyOpenGeneric(currentCandidate, containedDefinition)) {
+                    currentCandidate = containedDefinition;
+                }
+                
+                continue;
+            }
+
+            if (HandlePartiallyTypedGeneric(currentCandidate, containedDefinition, asTypeParams, ref highestMatchingParams)) {
+                currentCandidate = containedDefinition;
+            }
+        }
+        
+        return currentCandidate != null;
+    }
+    
+    public GenericDefaultInfo GetGenericInfo(Type asType) {
+        var asTypeParams = asType.GetGenericArguments();
+        GenericDefaultInfo? currentCandidate = null;
+        
+        var highestMatchingParams = 0;
+
+        foreach (var containedDefinition in GenericInfos) {
+            // No specified type params (lowest priority)
+            if (containedDefinition.AsTypeGenericArgs.All(arg => arg.IsGenericTypeParameter)) {
+                if (HandleFullyOpenGeneric(currentCandidate, containedDefinition)) {
+                    currentCandidate = containedDefinition;
+                }
+                
+                continue;
+            }
+
+            if (HandlePartiallyTypedGeneric(currentCandidate, containedDefinition, asTypeParams, ref highestMatchingParams)) {
+                currentCandidate = containedDefinition;
+            }
+        }
+        
+        return currentCandidate 
+               ?? throw new Exception($"No suitable generic default implementation found for type {asType.FullName} in definitions: {string.Join(", ", GenericInfos.Select(d => d.ToString()))}");
+    }
+
+    static bool HandleFullyOpenGeneric(GenericDefaultInfo? currentCandidate, GenericDefaultInfo defaultInfo) {
+        return currentCandidate == null || (currentCandidate.HasFlag(DefaultFlags.Overrideable) 
+                                            && !defaultInfo.HasFlag(DefaultFlags.Overrideable));
+    }
+    
+    // ReSharper disable once CognitiveComplexity
+    static bool HandlePartiallyTypedGeneric(GenericDefaultInfo? currentCandidate, GenericDefaultInfo defaultInfo, Type[] asTypeParams, ref int highestMatchingParams) {
+        if (defaultInfo.AsTypeGenericArgs is null)
+            throw new InvalidOperationException("AsTypeParameters cannot be null when handling non null params.");
+        
+        var isMatch = true;
+        var matchingParams = 0;
+           
+        // Find match and params
+        for (var i = 0; i < asTypeParams.Length; i++) {
+            var containedParam = defaultInfo.AsTypeGenericArgs[i];
+            if (containedParam.IsGenericTypeParameter)
+                continue;
+                
+            if (asTypeParams[i] != containedParam) {
+                isMatch = false;
+                break;
+            }
+                
+            matchingParams++;
+        }
+
+        // Check match
+        switch (isMatch) {
+            case true when highestMatchingParams < matchingParams 
+                           && !defaultInfo.HasFlag(DefaultFlags.Overrideable):
+                highestMatchingParams = matchingParams;
+                return true;
+            case true when highestMatchingParams == matchingParams 
+                           && (currentCandidate == null || (currentCandidate.HasFlag(DefaultFlags.Overrideable) 
+                                                            && !defaultInfo.HasFlag(DefaultFlags.Overrideable))):
+                return true;
+            default:
+                return false;
+        }
+    }
+}
+
 public class DefaultContainer {
     readonly ConcurrentDictionary<Type, ContainedDefault> defaults = new();
-    readonly ConcurrentDictionary<(string, Type), ContainedDefault> keyedDefaults = new();
+    //readonly ConcurrentDictionary<(string, Type), ContainedDefault> keyedDefaults = new();
     
-    public bool Contains(Type type) => defaults.ContainsKey(type);
-    public ContainedDefault Get(Type type) => defaults[type];
-    public bool TryGet(Type type, out ContainedDefault containedDefault) => defaults.TryGetValue(type, out containedDefault!);
+    readonly ConcurrentDictionary<Type, ContainedGenericDefinition> genericDefinitions = new();
+    
+    public bool Contains(Type type) {
+        if (defaults.ContainsKey(type))
+            return true;
+        
+        var genericTypeDef = type.IsGenericType ? type.GetGenericTypeDefinition() : null;
+        return genericTypeDef != null && genericDefinitions.ContainsKey(genericTypeDef) 
+                                      && genericDefinitions[genericTypeDef].Contains(type);
+    }
+
+    public ContainedDefault Get(Type type) {
+        if (defaults.TryGetValue(type, out var containedDefault) || TryAddFromGenericDefinitions(type, out containedDefault))
+            return containedDefault;
+
+        throw new Exception($"No default implementation found for type {type.FullName}.");
+    }
+
+    public bool TryGet(Type type, out ContainedDefault containedDefault) => 
+        defaults.TryGetValue(type, out containedDefault!) || TryAddFromGenericDefinitions(type, out containedDefault);
+
     public void Add(ContainedDefault containedDefault) {
         if (DefaultValidator.Validate(containedDefault.AsType, containedDefault.Instance, containedDefault.Flags)) {
             defaults[containedDefault.AsType] = containedDefault;
@@ -46,15 +205,34 @@ public class DefaultContainer {
         throw new Exception($"Instance of type {containedDefault.Instance.GetType().FullName} is not of the correct type {containedDefault.AsType.FullName}.");
     }
     
-    public bool Contains(string key, Type type) => keyedDefaults.ContainsKey((key, type));
-    public ContainedDefault Get(string key, Type type) => keyedDefaults[(key, type)];
-    public bool TryGet(string key, Type type, out ContainedDefault containedDefault) => keyedDefaults.TryGetValue((key, type), out containedDefault!);
-    public void Add(string key, ContainedDefault containedDefault) {
-        if (DefaultValidator.Validate(containedDefault.AsType, containedDefault.Instance, containedDefault.Flags)) {
-            keyedDefaults[(key, containedDefault.AsType)] = containedDefault;
-            return;
+    // public bool Contains(string key, Type type) => keyedDefaults.ContainsKey((key, type));
+    // public ContainedDefault Get(string key, Type type) => keyedDefaults[(key, type)];
+    // public bool TryGet(string key, Type type, out ContainedDefault containedDefault) => keyedDefaults.TryGetValue((key, type), out containedDefault!);
+    // public void Add(string key, ContainedDefault containedDefault) {
+    //     if (DefaultValidator.Validate(containedDefault.AsType, containedDefault.Instance, containedDefault.Flags)) {
+    //         keyedDefaults[(key, containedDefault.AsType)] = containedDefault;
+    //         return;
+    //     }
+    //     
+    //     throw new Exception($"Instance of type {containedDefault.Instance.GetType().FullName} is not of the correct type {containedDefault.AsType.FullName}.");
+    // }
+    
+    bool TryAddFromGenericDefinitions(Type type, out ContainedDefault containedDefault) {
+        var genericTypeDef = type.IsGenericType ? type.GetGenericTypeDefinition() : null;
+        if (genericTypeDef != null && genericDefinitions.TryGetValue(genericTypeDef, out var containedGenericDefinitionArray)) {
+            var genericInfo = containedGenericDefinitionArray.GetGenericInfo(type);
+            
+            if (ContainedDefaultFactory.TryBuildFromGenericInfo(genericInfo, type, this, out containedDefault)) {
+                Add(containedDefault);
+                return true;
+            }
         }
         
-        throw new Exception($"Instance of type {containedDefault.Instance.GetType().FullName} is not of the correct type {containedDefault.AsType.FullName}.");
+        containedDefault = null!;
+        return false;
+    }
+    
+    internal void AddGenericDefinitionArray(ContainedGenericDefinition containedGenericDefinition, Type asGenericTypeDefinition) {
+        genericDefinitions[asGenericTypeDefinition] = containedGenericDefinition;
     }
 }
