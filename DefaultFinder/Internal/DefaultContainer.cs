@@ -1,72 +1,14 @@
 ﻿using System.Collections.Concurrent;
-using System.Collections.Immutable;
 using System.Reflection;
 using DefaultFinder.Attributes;
-using DefaultFinder.Internal;
 
-namespace DefaultFinder;
+namespace DefaultFinder.Internal;
 
-public static class DefaultValidator {
-    public static bool Validate(Type asType, object instance, DefaultFlags flags) {
-        if (!asType.IsInstanceOfType(instance))
-            return false;
-
-        return true;
-    }
-    
-    internal static bool CanBe(GenericDefaultInfo genericDefaultInfo, Type asType) {
-        return true;
-        // if (!asType.IsGenericType)
-        //     return false;
-        //
-        // if (asType.GetGenericTypeDefinition() != genericDefaultInfo.AsTypeDefinition)
-        //     return false;
-        //
-        // // If no type params are specified, any generic args are acceptable
-        // if (genericDefaultInfo.AsTypeGenericArgs is null)
-        //     return true;
-        //
-        // // Cheack type params
-        // var typeParams = asType.GetGenericArguments();
-        //
-        // if (typeParams.Length != genericDefaultInfo.AsTypeGenericArgs.Length)
-        //     return false;
-        //
-        // for (int i = 0; i < typeParams.Length; i++) {
-        //     var asParam = genericDefaultInfo.AsTypeGenericArgs[i];
-        //     if (asParam is null)
-        //         continue;
-        //     
-        //     if (typeParams[i] != asParam)
-        //         return false;
-        // }
-        //
-        // return true;
-        //
-        // var isMatch = true;
-        // var matchingParams = 0;
-        //    
-        // // Find match and params
-        // for (var i = 0; i < asTypeParams.Length; i++) {
-        //     var containedParam = defaultInfo.AsTypeGenericArgs[i];
-        //     if (containedParam.IsGenericTypeParameter)
-        //         continue;
-        //         
-        //     if (asTypeParams[i] != containedParam) {
-        //         isMatch = false;
-        //         break;
-        //     }
-        //         
-        //     matchingParams++;
-        // }
-    }
-}
-
-public record TransientCtorInvoker(ConstructorInvoker Constructor, object?[]? Arguments) {
+internal record TransientCtorInvoker(ConstructorInvoker Constructor, object?[]? Arguments) {
     public object Invoke() => Arguments is null ? Constructor.Invoke() : Constructor.Invoke(Arguments.AsSpan());
 }
 
-public record ContainedDefault(Type ConcreteType, Type AsType, object Instance, DefaultFlags Flags) {
+internal record ContainedDefault(Type ConcreteType, Type AsType, object Instance, DefaultFlags Flags) {
     public TransientCtorInvoker? TransientCtor;
     
     public bool HasFlag(DefaultFlags flag) => (Flags & flag) == flag;
@@ -171,7 +113,7 @@ internal record ContainedGenericDefinition(GenericDefaultInfo[] GenericInfos) {
     }
 }
 
-public class DefaultContainer {
+internal class DefaultContainer {
     readonly ConcurrentDictionary<Type, ContainedDefault> defaults = new();
     //readonly ConcurrentDictionary<(string, Type), ContainedDefault> keyedDefaults = new();
     

@@ -8,6 +8,7 @@ public enum DefaultFlags {
     Cloneable = 1 << 2 | Transient,
 }
 
+[Flags]
 public enum FinderFlags {
     None = 0,
     ForceTransient = 1 << 0,
@@ -18,13 +19,16 @@ public enum FinderFlags {
 public class DefaultAttribute : Attribute {
     public readonly Type AsType;
     public readonly DefaultFlags Flags;
-    public readonly string Key;
-    public DefaultAttribute(Type @as, DefaultFlags flags = DefaultFlags.None) : this(string.Empty, @as, flags) {}
-    public DefaultAttribute(string key, Type @as, DefaultFlags flags = DefaultFlags.None) {
+    //public readonly string Key;
+    public DefaultAttribute(Type @as, DefaultFlags flags = DefaultFlags.None) {
         AsType = @as;
         Flags = flags;
-        Key = key;
     }
+    // public DefaultAttribute(string key, Type @as, DefaultFlags flags = DefaultFlags.None) {
+    //     AsType = @as;
+    //     Flags = flags;
+    //     Key = key;
+    // }
 }
 
 [AttributeUsage(AttributeTargets.Constructor)]

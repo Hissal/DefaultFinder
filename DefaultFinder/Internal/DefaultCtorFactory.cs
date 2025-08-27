@@ -4,7 +4,7 @@ using DefaultFinder.Attributes;
 
 namespace DefaultFinder.Internal;
 
-public static class DefaultCtorFactory {
+internal static class DefaultCtorFactory {
     internal static ConstructorInfo GetDefaultConstructor(Type type) {
         var ctors = type.GetConstructors(BindingFlags.Public | BindingFlags.Instance);
         var ctor = ctors.FirstOrDefault(c => c.GetCustomAttribute<DefaultConstructorAttribute>() != null)
@@ -75,7 +75,7 @@ public static class DefaultCtorFactory {
         var argInstances = ArrayPool<object>.Shared.Rent(ctorParams.Length);
         for (var index = 0; index < ctorParams.Length; index++) {
             var parameter = ctorParams[index];
-            if (DefaultFindR.TryFind(parameter.ParameterType, container, out var foundDefault, finderFlags)) {
+            if (DefaultExtractor.TryExtractDefault(parameter.ParameterType, container, out var foundDefault, finderFlags)) {
                 argInstances[index] = foundDefault;
             }
             else {
